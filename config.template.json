@@ -1,0 +1,27 @@
+{
+  "location": "Medellin, Colombia",
+  "company": {
+    "name": "TECHANDES Limited",
+    "registrationCountry": "Malta",
+    "registrationNumber": "C109990",
+    "address": "Level 2, Hardrocks Business Park, Burmarrad Road, NXR 6345, Naxxar, Malta"
+  },
+  "person": {
+    "name": "John Doe",
+    "identification": "1234567890"
+  },
+  "client": {
+    "name": "LeoVegas"
+  },
+  "amount": {
+    "hourlyRate": 20.00
+  },
+  "payment": {
+    "accountHolder": "John Doe",
+    "accountNumber": "123456789",
+    "accountType": "Savings",
+    "routingNumber": "021000021",
+    "bankName": "Bank of America",
+    "bankAddress": "100 N Tryon St, Charlotte, NC 28202"
+  }
+} 

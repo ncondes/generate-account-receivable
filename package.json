@@ -1,0 +1,22 @@
+{
+  "name": "generate-account-receivable",
+  "version": "1.0.0",
+  "description": "A Node.js terminal application to generate account receivable PDF documents",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "keywords": [
+    "pdf",
+    "account-receivable",
+    "invoice",
+    "generator"
+  ],
+  "author": "Nicolas Conde Salazar",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "nodemailer": "^7.0.7",
+    "pdfkit": "^0.14.0"
+  }
+}
