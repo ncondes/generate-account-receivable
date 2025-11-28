@@ -77,6 +77,11 @@ class PDFGeneratorService {
       // Add payable to section
       this.addPayableTo(doc, config.person);
       
+      // Compute weekday days from summary if available
+      const weekdayDays = invoiceData.summary
+          ? (invoiceData.summary.workingDays - invoiceData.summary.weekendDays)
+          : undefined;
+
       // Add amount due section
       this.addAmountDue(doc, config.client, {
           formattedAmount,
@@ -85,7 +90,9 @@ class PDFGeneratorService {
           periodStart: invoiceData.periodStart,
           periodEnd: invoiceData.periodEnd,
           formattedHourlyRate,
-          hourlyRateInWords
+          hourlyRateInWords,
+          weekendBilling: invoiceData.weekendBilling,
+          weekdayDays
       });
       
       // Add payment information
@@ -105,7 +112,7 @@ class PDFGeneratorService {
       doc.fontSize(12)
          .font('Helvetica')
          .text(`${location}, ${date}`, { align: 'left' })
-         .moveDown(4);
+         .moveDown(3);
   }
 
   /**
@@ -121,7 +128,7 @@ class PDFGeneratorService {
          .font('Helvetica')
          .text(`Registration number (${company.registrationCountry}): ${company.registrationNumber}`, { align: 'center' })
          .text(`Address: ${company.address}`, { align: 'center' })
-         .moveDown(4);
+         .moveDown(3);
   }
 
   /**
@@ -149,16 +156,9 @@ class PDFGeneratorService {
   static addAmountDue(doc, client, amountData) {
       doc.fontSize(12)
          .font('Helvetica-Bold')
-         .text('Amount Due: ', { align: 'left', continued: true })
-         .text('USD ', { continued: true })
-         .text(`${amountData.formattedAmount}`, { continued: true })
+         .text('Amount Due', { align: 'left' })
          .font('Helvetica')
-         .text(` (${amountData.amountInWords})`, { align: 'left' })
-         .text('Corresponding to ', { continued: true })
-         .font('Helvetica-Bold')
-         .text(`${amountData.totalHours} hours`, { continued: true })
-         .font('Helvetica')
-         .text(' worked between ', { continued: true })
+         .text('Covering the period from ', { continued: true })
          .font('Helvetica-Bold')
          .text(`${amountData.periodStart}`, { continued: true })
          .font('Helvetica')
@@ -171,14 +171,47 @@ class PDFGeneratorService {
          .text(`${client.name}`, { continued: true })
          .font('Helvetica')
          .text('.')
-         .moveDown(1)
-         .font('Helvetica-Bold')
-         .text('Hourly Rate: ', { continued: true })
-         .text('USD ', { continued: true })
-         .text(`${amountData.formattedHourlyRate}`, { continued: true })
-         .font('Helvetica')
-         .text(` (${amountData.hourlyRateInWords}).`)
-         .moveDown(3);
+         .moveDown(1);
+
+      // Render weekday/weekend breakdown if available
+      const wb = amountData.weekendBilling;
+      if (wb) {
+          const formattedRegularAmount = NumberUtil.formatCurrency(wb.weekdayAmount);
+          const formattedWeekendAmount = NumberUtil.formatCurrency(wb.weekendAmount);
+
+          // Breakdown heading
+          doc.font('Helvetica-Bold')
+             .text('Breakdown:')
+             .font('Helvetica');
+
+          // Weekday line (bulleted) with days
+          const weekdayLabel = typeof amountData.weekdayDays === 'number'
+              ? `${amountData.weekdayDays} ${amountData.weekdayDays === 1 ? 'weekday' : 'weekdays'}`
+              : 'weekdays';
+          doc.text(`• ${wb.weekdayHours} hours × USD ${amountData.formattedHourlyRate} = USD ${formattedRegularAmount} — `, { continued: true })
+             .text(weekdayLabel)
+
+          // Weekend line (only if there are any weekend hours)
+          if (wb.weekendHours > 0) {
+              const weekendLabel = wb.weekendDays && wb.weekendDays > 0
+                ? `${wb.weekendDays} ${wb.weekendDays === 1 ? 'weekend day' : 'weekend days'}`
+                : 'weekends';
+              doc.text(`• ${wb.weekendHours} hours × USD ${wb.formattedWeekendRate} = USD ${formattedWeekendAmount} — `, { continued: true })
+                 .text(weekendLabel)
+          }
+
+          // Total line
+          doc.moveDown(0.5)
+             .font('Helvetica-Bold')
+             .text(`Amount Due (Total): USD ${amountData.formattedAmount}`)
+             .font('Helvetica')
+             .text(`In words: ${amountData.amountInWords}`)
+             .moveDown(2);
+          return;
+      }
+
+      // Default spacing when no breakdown is present
+      doc.moveDown(3);
   }
 
   /**

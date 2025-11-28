@@ -47,10 +47,10 @@ async function generateAccountReceivable() {
 
       // Add weekend billing details if there are weekend hours
       if (invoiceData.summary.weekendHours > 0) {
-          summaryData['Weekday Hours'] = `${invoiceData.summary.regularHours}h`;
+          summaryData['Weekday Hours'] = `${invoiceData.summary.weekdayHours}h`;
           summaryData['Weekend Hours'] = `${invoiceData.summary.weekendHours}h (${invoiceData.summary.weekendDays} days)`;
           summaryData['Weekend Rate'] = `$${invoiceData.summary.hourlyRate * 2}/hour`;
-          summaryData['Weekday Amount'] = `$${invoiceData.summary.regularAmount}`;
+          summaryData['Weekday Amount'] = `$${invoiceData.summary.weekdayAmount}`;
           summaryData['Weekend Amount'] = `$${invoiceData.summary.weekendAmount}`;
           summaryData['Total Amount'] = `$${invoiceData.summary.calculatedAmount}`;
       }

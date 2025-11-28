@@ -51,7 +51,7 @@ class InvoiceCalculatorService {
           const csvData = CSVParserService.parseCSV(csvPath);
           
           // Calculate invoice amounts with weekend double billing
-          let regularHours = 0;
+          let weekdayHours = 0;
           let weekendHours = 0;
           let weekendDays = 0;
           
@@ -61,14 +61,14 @@ class InvoiceCalculatorService {
                   weekendHours += entry.hoursWorked;
                   weekendDays++;
               } else {
-                  regularHours += entry.hoursWorked;
+                  weekdayHours += entry.hoursWorked;
               }
           }
           
-          // Calculate amounts: regular hours at normal rate, weekend hours at 2x rate
-          const regularAmount = Math.ceil(hourlyRate * regularHours);
+          // Calculate amounts: weekday hours at normal rate, weekend hours at 2x rate
+          const weekdayAmount = Math.ceil(hourlyRate * weekdayHours);
           const weekendAmount = Math.ceil(hourlyRate * 2 * weekendHours);
-          const calculatedAmount = regularAmount + weekendAmount;
+          const calculatedAmount = weekdayAmount + weekendAmount;
           
           const formattedAmount = NumberUtil.formatCurrency(calculatedAmount);
           const amountInWords = NumberUtil.amountToWords(calculatedAmount);
@@ -88,10 +88,10 @@ class InvoiceCalculatorService {
               
               // Weekend billing details
               weekendBilling: {
-                  regularHours,
+                  weekdayHours,
                   weekendHours,
                   weekendDays,
-                  regularAmount,
+                  weekdayAmount,
                   weekendAmount,
                   weekendRate: hourlyRate * 2,
                   formattedWeekendRate: NumberUtil.formatCurrency(hourlyRate * 2)
@@ -101,7 +101,7 @@ class InvoiceCalculatorService {
               summary: {
                   workingDays: csvData.dailyEntries.length,
                   totalHours: csvData.totalHours,
-                  regularHours,
+                  weekdayHours,
                   weekendHours,
                   weekendDays,
                   periodStart: csvData.periodStart,
@@ -109,7 +109,7 @@ class InvoiceCalculatorService {
                   hourlyRate,
                   calculatedAmount,
                   formattedAmount,
-                  regularAmount,
+                  weekdayAmount,
                   weekendAmount
               }
           };
