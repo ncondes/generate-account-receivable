@@ -127,6 +127,33 @@ SENT_TO=invoices_email@techandes.com
 4. Copy the generated password
 5. Use this password as your `MAILER_SECRET_KEY` (not your regular Gmail password)
 
+## Optional Features
+
+### Claude Code PRO subscription reimbursement
+
+You can optionally include a separate section in the generated PDF to request reimbursement for a Claude Code PRO subscription used for development work on the invoiced project.
+
+To enable this, configure the `claude` block in your `config.json`:
+
+```json
+"claude": {
+  "enabled": true,
+  "name": "Claude Code PRO",
+  "amount": 20.00,
+  "currency": "USD"
+}
+```
+
+When `claude.enabled` is set to `true`:
+
+- The main invoice calculation remains based solely on your hourly rate and time report.
+- An additional \"Tools & Subscriptions\" section is added to the PDF, in formal English, explaining that:
+  - You maintain an active Claude Code PRO (or the value of `claude.name`) subscription used exclusively for the client’s projects.
+  - The subscription is a developer productivity and code quality tool that supports the timely delivery and maintainability of the software delivered.
+- A clear sentence states that the reimbursable amount for the Claude Code PRO subscription for the invoiced period is the configured `amount` and `currency` (for example **USD 20.00**).
+
+If the `claude` block is omitted or `enabled` is set to `false`, this section is not added and the behavior is identical to the original version.
+
 ## Dependencies
 
 - **pdfkit**: PDF generation

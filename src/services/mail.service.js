@@ -61,6 +61,26 @@ class MailService {
               year: 'numeric' 
           });
 
+          const formatCurrency = (value) => {
+              const safeValue = typeof value === 'number' ? value : Number(value);
+              if (Number.isNaN(safeValue)) return null;
+              return new Intl.NumberFormat('en-US', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2
+              }).format(safeValue);
+          };
+
+          const servicesSubtotal = invoiceData?.totals?.servicesSubtotal;
+          const toolsSubtotal = invoiceData?.totals?.toolsSubtotal;
+          const grandTotal = invoiceData?.totals?.grandTotal;
+
+          const formattedServicesSubtotal = formatCurrency(servicesSubtotal);
+          const formattedToolsSubtotal = formatCurrency(toolsSubtotal);
+          const formattedGrandTotal = formatCurrency(grandTotal);
+          const amountToShow = formattedGrandTotal || invoiceData.formattedAmount;
+          const hasToolsAndSubscriptions = (typeof toolsSubtotal === 'number' && toolsSubtotal > 0)
+              || (!!formattedToolsSubtotal && Number(formattedToolsSubtotal.replace(/,/g, '')) > 0);
+
           // Email content
           const subject = `Account Receivable - ${monthYear} - ${clientName}`;
           const htmlContent = `
@@ -75,8 +95,26 @@ class MailService {
                       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse; color: #495057;">
                           <tr>
                               <td style="padding: 10px 0; font-weight: 600; width: 40%;">Amount</td>
-                              <td style="padding: 10px 0; text-align: right;">${invoiceData.formattedAmount}</td>
+                              <td style="padding: 10px 0; text-align: right;">${amountToShow}</td>
                           </tr>
+                          ${hasToolsAndSubscriptions && formattedServicesSubtotal ? `
+                          <tr>
+                              <td colspan="2" style="height: 1px; background: #f0f1f3;"></td>
+                          </tr>
+                          <tr>
+                              <td style="padding: 10px 0; font-weight: 600;">Services subtotal</td>
+                              <td style="padding: 10px 0; text-align: right;">${formattedServicesSubtotal}</td>
+                          </tr>
+                          ` : ''}
+                          ${hasToolsAndSubscriptions && formattedToolsSubtotal ? `
+                          <tr>
+                              <td colspan="2" style="height: 1px; background: #f0f1f3;"></td>
+                          </tr>
+                          <tr>
+                              <td style="padding: 10px 0; font-weight: 600;">Tools & subscriptions</td>
+                              <td style="padding: 10px 0; text-align: right;">${formattedToolsSubtotal}</td>
+                          </tr>
+                          ` : ''}
                           <tr>
                               <td colspan="2" style="height: 1px; background: #f0f1f3;"></td>
                           </tr>

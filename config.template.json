@@ -16,6 +16,12 @@
   "amount": {
     "hourlyRate": 20.00
   },
+  "claude": {
+    "enabled": false,
+    "name": "Claude Code MAX",
+    "amount": 100.00,
+    "currency": "USD"
+  },
   "payment": {
     "accountHolder": "John Doe",
     "accountNumber": "123456789",

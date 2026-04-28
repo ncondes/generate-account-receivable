@@ -16,7 +16,6 @@ async function generateAccountReceivable() {
   try {
       LoggerService.section('Account Receivable Generator');
       
-      // Load configuration
       LoggerService.step('Loading configuration', 'pending');
       const config = ConfigService.loadConfig('config.json');
       if (!config) {
@@ -24,28 +23,40 @@ async function generateAccountReceivable() {
       }
       LoggerService.step('Configuration loaded', 'completed');
 
-      // Validate configuration
       LoggerService.step('Validating configuration', 'pending');
       if (!ConfigService.validateConfig(config)) {
           throw new Error('Configuration validation failed');
       }
       LoggerService.step('Configuration validated', 'completed');
 
-      // Calculate invoice data
       LoggerService.step('Calculating invoice data', 'pending');
       const invoiceData = InvoiceCalculatorService.autoCalculateInvoice('input', config.amount.hourlyRate);
       LoggerService.step('Invoice data calculated', 'completed');
 
-      // Log summary with weekend billing details
+      // Compute subtotals and grand total
+      const servicesSubtotal = invoiceData.calculatedAmount;
+      const includeClaudeSubscription = !!(config.claude && config.claude.enabled);
+      const toolsSubtotal = includeClaudeSubscription && typeof config.claude.amount === 'number'
+          ? config.claude.amount
+          : 0;
+      const grandTotal = servicesSubtotal + toolsSubtotal;
+
+      invoiceData.totals = {
+          servicesSubtotal,
+          toolsSubtotal,
+          grandTotal
+      };
+
       const summaryData = {
           'Working Days': invoiceData.summary.workingDays,
           'Total Hours': invoiceData.summary.totalHours,
           'Period': `${invoiceData.summary.periodStart} to ${invoiceData.summary.periodEnd}`,
           'Hourly Rate': `$${invoiceData.summary.hourlyRate}`,
-          'Total Amount': invoiceData.summary.formattedAmount
+          'Services Subtotal': `$${servicesSubtotal}`,
+          'Tools & Subscriptions': `$${toolsSubtotal}`,
+          'Total Payable': `$${grandTotal}`
       };
 
-      // Add weekend billing details if there are weekend hours
       if (invoiceData.summary.weekendHours > 0) {
           summaryData['Weekday Hours'] = `${invoiceData.summary.weekdayHours}h`;
           summaryData['Weekend Hours'] = `${invoiceData.summary.weekendHours}h (${invoiceData.summary.weekendDays} days)`;
@@ -57,15 +68,26 @@ async function generateAccountReceivable() {
 
       LoggerService.summary(summaryData, 'Invoice Summary');
 
-      // Generate output filename
       const filename = DateUtil.generateFilename(invoiceData.periodStart, invoiceData.periodEnd);
       const outputPath = `output/${filename}`;
 
       LoggerService.info(`Output file: ${outputPath}`);
 
-      // Generate PDF with invoice data
+      const claudeSubscription = includeClaudeSubscription
+          ? {
+              toolName: config.claude.name || 'Claude Code PRO',
+              amount: config.claude.amount,
+              currency: config.claude.currency || 'USD',
+              periodStart: invoiceData.periodStart,
+              periodEnd: invoiceData.periodEnd,
+              clientName: config.client.name
+          }
+          : null;
+
       LoggerService.step('Generating PDF document', 'pending');
-      await PDFGeneratorService.generatePDF(config, outputPath, invoiceData);
+      await PDFGeneratorService.generatePDF(config, outputPath, invoiceData, {
+          claudeSubscription
+      });
       LoggerService.step('PDF document generated', 'completed');
       
       return { success: true, outputPath, clientName: config.client.name, invoiceData, config };

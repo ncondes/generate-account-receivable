@@ -9,12 +9,14 @@ class PDFGeneratorService {
    * @param {Object} config - Configuration object
    * @param {string} outputPath - Output file path
    * @param {Object} invoiceData - Invoice calculation data
+   * @param {Object} [options] - Optional extra rendering options (e.g. tools & subscriptions)
    * @returns {Promise<boolean>} True if successful
    */
-  static async generatePDF(config, outputPath, invoiceData) {
+  static async generatePDF(config, outputPath, invoiceData, options = {}) {
       try {
           const doc = new PDFDocument({
               size: 'A4',
+              bufferPages: true,
               margins: {
                   top: 60,
                   bottom: 60,
@@ -28,7 +30,10 @@ class PDFGeneratorService {
           doc.pipe(stream);
 
           // Add content to PDF
-          this.addContent(doc, config, invoiceData);
+          this.addContent(doc, config, invoiceData, options);
+
+          // Add page numbers to all pages
+          this.addPageNumbers(doc);
 
           // Finalize PDF
           doc.end();
@@ -54,9 +59,9 @@ class PDFGeneratorService {
    * @param {PDFDocument} doc - PDF document instance
    * @param {Object} config - Configuration object
    * @param {Object} invoiceData - Invoice calculation data
+   * @param {Object} options - Optional extra rendering options
    */
-  static addContent(doc, config, invoiceData) {
-      // Use pre-calculated values from invoice data
+  static addContent(doc, config, invoiceData, options = {}) {
       const todayDate = DateUtil.getTodayDate();
       const totalHours = invoiceData.totalHours;
       const calculatedAmount = invoiceData.calculatedAmount;
@@ -65,16 +70,12 @@ class PDFGeneratorService {
       const formattedHourlyRate = invoiceData.formattedHourlyRate;
       const hourlyRateInWords = invoiceData.hourlyRateInWords;
 
-      // Set default font and add some professional spacing
       doc.font('Helvetica').fontSize(12);
 
-      // Add header
       this.addHeader(doc, config.location, todayDate);
       
-      // Add company information
       this.addCompanyInfo(doc, config.company);
       
-      // Add payable to section
       this.addPayableTo(doc, config.person);
       
       // Compute weekday days from summary if available
@@ -82,7 +83,6 @@ class PDFGeneratorService {
           ? (invoiceData.summary.workingDays - invoiceData.summary.weekendDays)
           : undefined;
 
-      // Add amount due section
       this.addAmountDue(doc, config.client, {
           formattedAmount,
           amountInWords,
@@ -92,13 +92,14 @@ class PDFGeneratorService {
           formattedHourlyRate,
           hourlyRateInWords,
           weekendBilling: invoiceData.weekendBilling,
-          weekdayDays
+          weekdayDays,
+          totals: invoiceData.totals
       });
       
-      // Add payment information
       this.addPaymentInfo(doc, config.payment);
+
+      this.addToolsAndSubscriptionsSection(doc, config.client, invoiceData, options.claudeSubscription);
       
-      // Add signature section
       this.addSignature(doc, config.person);
   }
 
@@ -173,25 +174,21 @@ class PDFGeneratorService {
          .text('.')
          .moveDown(1);
 
-      // Render weekday/weekend breakdown if available
       const wb = amountData.weekendBilling;
       if (wb) {
           const formattedRegularAmount = NumberUtil.formatCurrency(wb.weekdayAmount);
           const formattedWeekendAmount = NumberUtil.formatCurrency(wb.weekendAmount);
 
-          // Breakdown heading
           doc.font('Helvetica-Bold')
              .text('Breakdown:')
              .font('Helvetica');
 
-          // Weekday line (bulleted) with days
           const weekdayLabel = typeof amountData.weekdayDays === 'number'
               ? `${amountData.weekdayDays} ${amountData.weekdayDays === 1 ? 'weekday' : 'weekdays'}`
               : 'weekdays';
           doc.text(`• ${wb.weekdayHours} hours × USD ${amountData.formattedHourlyRate} = USD ${formattedRegularAmount} — `, { continued: true })
              .text(weekdayLabel)
 
-          // Weekend line (only if there are any weekend hours)
           if (wb.weekendHours > 0) {
               const weekendLabel = wb.weekendDays && wb.weekendDays > 0
                 ? `${wb.weekendDays} ${wb.weekendDays === 1 ? 'weekend day' : 'weekend days'}`
@@ -200,18 +197,32 @@ class PDFGeneratorService {
                  .text(weekendLabel)
           }
 
-          // Total line
-          doc.moveDown(0.5)
-             .font('Helvetica-Bold')
-             .text(`Amount Due (Total): USD ${amountData.formattedAmount}`)
-             .font('Helvetica')
-             .text(`In words: ${amountData.amountInWords}`)
-             .moveDown(2);
-          return;
+          doc.moveDown(0.5);
       }
 
-      // Default spacing when no breakdown is present
-      doc.moveDown(3);
+      const totals = amountData.totals || {};
+      const servicesSubtotal = typeof totals.servicesSubtotal === 'number'
+          ? NumberUtil.formatCurrency(totals.servicesSubtotal)
+          : amountData.formattedAmount;
+      const toolsSubtotal = typeof totals.toolsSubtotal === 'number'
+          ? NumberUtil.formatCurrency(totals.toolsSubtotal)
+          : null;
+      const grandTotal = typeof totals.grandTotal === 'number'
+          ? NumberUtil.formatCurrency(totals.grandTotal)
+          : servicesSubtotal;
+
+      doc.font('Helvetica-Bold')
+         .text(`Services subtotal (excluding tools): USD ${servicesSubtotal}`);
+
+      if (toolsSubtotal && totals.toolsSubtotal > 0) {
+          doc.text(`Tools & subscriptions subtotal (see page 2): USD ${toolsSubtotal}`);
+      }
+
+      doc.moveDown(0.5)
+         .text(`Total payable: USD ${grandTotal}`)
+         .font('Helvetica')
+         .text(`In words: ${amountData.amountInWords}`)
+         .moveDown(2);
   }
 
   /**
@@ -249,6 +260,92 @@ class PDFGeneratorService {
          .font('Helvetica')
          .text(payment.bankAddress)
          .moveDown(4);
+  }
+
+  /**
+   * Add tools & subscriptions section (e.g. Claude Code PRO)
+   * @param {PDFDocument} doc - PDF document instance
+   * @param {Object} client - Client information
+   * @param {Object} invoiceData - Invoice calculation data
+   * @param {Object|null} claudeSubscription - Claude subscription metadata
+   */
+  static addToolsAndSubscriptionsSection(doc, client, invoiceData, claudeSubscription) {
+      if (!claudeSubscription) {
+          return;
+      }
+
+      doc.addPage();
+
+      const formattedClaudeAmount = NumberUtil.formatCurrency(claudeSubscription.amount);
+      const currencyCode = claudeSubscription.currency || 'USD';
+
+      // Section heading
+      doc.fontSize(12)
+         .font('Helvetica-Bold')
+         .text('Tools & Subscriptions', { align: 'left' })
+         .moveDown(0.5);
+
+      doc.font('Helvetica');
+
+      const clientName = claudeSubscription.clientName || client.name;
+
+      doc
+        .text(
+          'In addition to the professional services detailed above, this invoice includes the reimbursement of a ',
+          { continued: true }
+        )
+        .font('Helvetica-Bold')
+        .text(claudeSubscription.toolName, { continued: true })
+        .font('Helvetica')
+        .text(' subscription used exclusively in the performance of development work for ', { continued: true })
+        .font('Helvetica-Bold')
+        .text(`${clientName}.`)
+      .moveDown(0.5)
+      .font('Helvetica')
+      .text(
+          'This subscription is a specialized developer productivity and code quality tool that supports the timely delivery and maintainability of the software solutions provided.'
+      )
+      .moveDown(0.5);
+
+      doc
+        .font('Helvetica-Bold')
+        .text('The reimbursable amount for the ', { continued: true })
+        .text(claudeSubscription.toolName, { continued: true })
+        .font('Helvetica')
+        .text(' subscription is ', { continued: true })
+        .font('Helvetica-Bold')
+        .text(`${currencyCode} ${formattedClaudeAmount}`, { continued: true })
+        .font('Helvetica')
+        .text(', which is included in the Total payable shown on page 1.')
+      .moveDown(1.5);
+  }
+
+  static addPageNumbers(doc) {
+      const range = doc.bufferedPageRange(); // { start, count }
+
+      for (let i = range.start; i < range.start + range.count; i++) {
+          doc.switchToPage(i);
+
+          const pageNumber = i - range.start + 1;
+          const totalPages = range.count;
+
+          const oldBottomMargin = doc.page.margins.bottom;
+          doc.page.margins.bottom = 0;
+
+          doc.fontSize(9)
+             .font('Helvetica')
+             .text(
+                 `Page ${pageNumber} of ${totalPages}`,
+                 0,
+                 doc.page.height - oldBottomMargin / 2,
+                 {
+                     align: 'center',
+                     width: doc.page.width
+                 }
+             );
+
+          doc.page.margins.bottom = oldBottomMargin;
+      }
   }
 
   /**
